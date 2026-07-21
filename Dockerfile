@@ -1,15 +1,25 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-RUN pip install --no-cache-dir spotdl pyTelegramBotAPI
+# FFmpeg is required by spotDL for conversion to MP3
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m -u 1000 user
-USER user
-ENV HOME=/home/user
-WORKDIR /home/user/app
+WORKDIR /app
 
-COPY --chown=user app.py .
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 7860
-CMD ["python", "app.py"]
+COPY bot ./bot
+
+# Run as an unprivileged user; writable dirs are created up front
+RUN useradd -m botuser \
+    && mkdir -p /app/data /app/logs /app/downloads \
+    && chown -R botuser:botuser /app
+USER botuser
+
+CMD ["python", "-m", "bot.main"]
